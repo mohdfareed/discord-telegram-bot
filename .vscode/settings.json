@@ -1,0 +1,29 @@
+{
+    // debugging
+    "debugpy.debugJustMyCode": false,
+    // formatting
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "always"
+        },
+    },
+    "black-formatter.args": [
+        "--line-length",
+        "79"
+    ],
+    "isort.args": [
+        "--profile",
+        "black"
+    ],
+    // spelling
+    "cSpell.ignorePaths": [
+        ".git",
+        ".venv",
+        ".vscode",
+        ".gitignore",
+        "pyproject.toml",
+    ],
+    "cSpell.words": [],
+}
