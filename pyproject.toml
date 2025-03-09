@@ -31,7 +31,7 @@ dev = [
 # MARK: Poetry
 
 [project.scripts]
-start-bot = "bot.main:app"
+bot = "bot.main:app"
 
 [tool.poetry]
 packages = [

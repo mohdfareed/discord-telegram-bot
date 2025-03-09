@@ -4,5 +4,5 @@ __all__ = ["APP_NAME", "__version__"]
 
 from importlib.metadata import version
 
-APP_NAME = "start-bot"
+APP_NAME = "bot"
 __version__ = version("discord-telegram-bot")

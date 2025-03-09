@@ -22,8 +22,13 @@
         ".git",
         ".venv",
         ".vscode",
+        ".env",
         ".gitignore",
         "pyproject.toml",
     ],
-    "cSpell.words": [],
+    "cSpell.words": [
+        "dotenv",
+        "levelname",
+        "msecs"
+    ],
 }
