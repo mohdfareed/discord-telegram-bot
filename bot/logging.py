@@ -8,10 +8,7 @@ from pathlib import Path
 from rich.logging import RichHandler
 from rich.text import Text
 
-WARN_MODULES = [
-    "discord",
-    "asyncio",
-]
+WARN_MODULES = ["asyncio", "discord", "telegram", "httpcore", "httpx"]
 """Modules for which to log warnings and above."""
 
 
