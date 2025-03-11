@@ -34,10 +34,6 @@ class DiscordBot(core.ChatBot, commands.Cog):
         self.logger.info("Starting Discord bot.")
         await self.bot.start(self.token)
 
-    async def stop(self) -> None:
-        self.logger.info("Stopping Discord bot.")
-        await self.bot.close()
-
     async def on_ready(self) -> None:
         if not self.bot.user:
             raise RuntimeError("Bot failed to log in.")

@@ -1,6 +1,5 @@
 __all__ = ["TelegramBot"]
 
-
 import telegram
 from telegram.ext import Application, CommandHandler, ContextTypes
 
@@ -23,19 +22,18 @@ class TelegramBot(core.ChatBot):
 
     async def start(self) -> None:
         self.logger.info("Starting Telegram bot.")
+        if not self.app.updater:
+            self.logger.error("Telegram bot not initialized properly.")
+            return
+
         await self.app.initialize()
         await self.app.start()
-
-        if not self.app.updater:
-            self.logger.error("Telegram updater did not initialize.")
-            return
         await self.app.updater.start_polling()
 
     async def stop(self) -> None:
-        self.logger.info("Stopping Telegram bot.")
+        self.logger.debug("Stopping Telegram bot.")
         if self.app.updater:
             await self.app.updater.stop()
-
         await self.app.stop()
         await self.app.shutdown()
 

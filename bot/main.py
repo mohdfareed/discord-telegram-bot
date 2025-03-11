@@ -50,6 +50,6 @@ async def start_bots() -> None:
     try:
         await telegram_bot.start()
         await discord_bot.start()
-    except KeyboardInterrupt:
-        await discord_bot.stop()
+    finally:  # cleanup
+        print()
         await telegram_bot.stop()

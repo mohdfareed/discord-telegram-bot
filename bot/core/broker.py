@@ -1,6 +1,5 @@
 __all__ = ["ChatBroker"]
 
-
 import logging
 import uuid
 
@@ -23,8 +22,9 @@ class ChatBroker:
             del brokage.subs[brokage.pubs[publisher]]
             del brokage.pubs[publisher]
 
-        brokage.pubs[publisher] = uuid.uuid4().int  # update publisher id
-        brokage.subs[brokage.pubs[publisher]] = set()  # create new subs
+        new_id = uuid.uuid4().int
+        brokage.pubs[publisher] = new_id  # update publisher id
+        brokage.subs[new_id] = set()  # create new subs
         self.database.save(brokage)
 
     def get_publisher_id(self, publisher: str) -> int:
@@ -32,6 +32,7 @@ class ChatBroker:
         brokage = self.database.load(models.Brokage())
         if publisher not in brokage.pubs:
             self.reset_publisher_id(publisher)
+            brokage = self.database.load(models.Brokage())  # reload
         return brokage.pubs[publisher]
 
     def get_subscribers(self, publisher: str) -> set[str]:
@@ -39,6 +40,7 @@ class ChatBroker:
         brokage = self.database.load(models.Brokage())
         if publisher not in brokage.pubs:
             self.reset_publisher_id(publisher)
+            brokage = self.database.load(models.Brokage())  # reload
         return brokage.subs.get(brokage.pubs[publisher], set())
 
     def get_subscriptions(self, subscriber: str) -> set[int]:

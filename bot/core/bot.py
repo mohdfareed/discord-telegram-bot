@@ -19,9 +19,6 @@ class ChatBot:
     @abstractmethod
     def start(self) -> Any: ...
 
-    @abstractmethod
-    def stop(self) -> Any: ...
-
     def register_message_handler(self, handler: models.MessageHandler) -> None:
         """Register a message handler."""
         self.handlers.append(handler)
