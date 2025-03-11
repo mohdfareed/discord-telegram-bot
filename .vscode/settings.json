@@ -23,6 +23,7 @@
         ".venv",
         ".vscode",
         ".env",
+        ".dockerignore",
         ".gitignore",
         "pyproject.toml",
     ],
@@ -30,6 +31,8 @@
         "dotenv",
         "levelname",
         "msecs",
-        "unsub"
+        "pyproject",
+        "unsub",
+        "venv"
     ],
 }
