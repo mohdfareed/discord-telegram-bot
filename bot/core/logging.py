@@ -15,13 +15,14 @@ WARN_MODULES = ["asyncio", "discord", "telegram", "httpcore", "httpx"]
 def setup_logging(debug: bool, log_file: Path) -> None:
     """Setup logging for the application."""
     root_logger = logging.getLogger()
+    root_logger.setLevel(logging.NOTSET)
 
-    root_logger.setLevel(logging.DEBUG if debug else logging.INFO)
     root_logger.addHandler(console_handler(debug))
     root_logger.addHandler(file_handler(log_file))
 
     for module in WARN_MODULES:  # Reduce log level for non-debug modules
         logging.getLogger(module).setLevel(logging.WARNING)
+    root_logger.debug("Debug mode enabled.")
 
 
 def console_handler(debug: bool) -> logging.Handler:

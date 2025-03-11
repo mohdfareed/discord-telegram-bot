@@ -1,5 +1,5 @@
 services:
-  bot:
+  app:
     build: .
     environment:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
