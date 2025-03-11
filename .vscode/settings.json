@@ -29,6 +29,7 @@
     "cSpell.words": [
         "dotenv",
         "levelname",
-        "msecs"
+        "msecs",
+        "unsub"
     ],
 }

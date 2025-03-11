@@ -1,176 +1,136 @@
-__all__ = ["send_message"]
+__all__ = ["TelegramBot"]
 
-import logging
 
 import telegram
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-from bot import models
-
-logger = logging.getLogger(__name__)
-subscriptions: models.Subscriptions = models.Subscriptions.load()
-bot: telegram.Bot | None = None
+from bot import core
 
 
-def start_bot(token: str) -> None:
-    """Start the bot (blocking)."""
-    global bot
+class TelegramBot(core.ChatBot):
+    def __init__(self, token: str, broker: core.ChatBroker) -> None:
+        super().__init__(broker)
+        self.token = token
 
-    application = Application.builder().token(token).build()
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("get_id", get_id_command))
-    application.add_handler(CommandHandler("subs", subs_command))
-    application.add_handler(CommandHandler("subscribe", subscribe_command))
-    application.add_handler(CommandHandler("unsubscribe", unsubscribe_command))
-
-    bot = application.bot
-    logger.info("Starting Telegram bot.")
-    application.run_polling()
-
-
-async def send_message(message: models.Message) -> None:
-    """Send a message via Telegram."""
-    global bot
-    if bot is None:
-        logger.error("Telegram bot not initialized.")
-        return
-
-    for chat_id in subscriptions.get_subscribers(message.chat_id):
-        logger.debug(f"Sending message from {message.chat_id} to {chat_id}")
-        await bot.send_message(chat_id, message.text)
-
-
-async def help_command(
-    update: telegram.Update, _: ContextTypes.DEFAULT_TYPE
-) -> None:
-    if update.message is None:
-        return
-    await update.message.reply_text(
-        "The bot broadcasts messages from Discord to Telegram.\n"
-        "Use the /get_id command to get the chat ID of the current chat.\n"
-        "This ID can be used to subscribe this channel to Discord messages.\n"
-        "Use the /subscribe <telegram_chat_id> <discord_chat_id> command to subscribe."
-    )
-
-
-async def get_id_command(
-    update: telegram.Update, _: ContextTypes.DEFAULT_TYPE
-) -> None:
-    logger.debug(f"Received get_id command: {update.message}")
-    if update.message is None:
-        return
-    if update.message.from_user is None:
-        return
-
-    member = await update.get_bot().get_chat_member(
-        update.message.chat_id, update.message.from_user.id
-    )
-
-    if (
-        update.message.chat.type != update.message.chat.PRIVATE
-        and member.status
-        not in [
-            telegram.constants.ChatMemberStatus.ADMINISTRATOR,
-            telegram.constants.ChatMemberStatus.OWNER,
-        ]
-    ):
-        return
-
-    logger.info(f"Sending chat ID to {update.message.from_user}")
-    await update.message.from_user.send_message(f"{update.message.chat_id}")
-
-
-async def subs_command(
-    update: telegram.Update, _: ContextTypes.DEFAULT_TYPE
-) -> None:
-    logger.debug(f"Received subs command: {update.message}")
-    if update.message is None:
-        return
-    if update.message.from_user is None:
-        return
-
-    member = await update.get_bot().get_chat_member(
-        update.message.chat_id, update.message.from_user.id
-    )
-
-    if (
-        update.message.chat.type != update.message.chat.PRIVATE
-        and member.status
-        not in [
-            telegram.constants.ChatMemberStatus.ADMINISTRATOR,
-            telegram.constants.ChatMemberStatus.OWNER,
-        ]
-    ):
-        return
-
-    logger.info(f"Getting subscriptions count for {update.message.chat_id}")
-    count = subscriptions.get_subs_count(update.message.chat_id)
-    await update.message.reply_text(f"Subscriptions: {count}")
-
-
-async def subscribe_command(
-    update: telegram.Update, _: ContextTypes.DEFAULT_TYPE
-) -> None:
-    logger.debug(f"Received subscribe command: {update.message}")
-    if update.message is None:
-        return
-    if update.message.from_user is None:
-        return
-
-    member = await update.get_bot().get_chat_member(
-        update.message.chat_id, update.message.from_user.id
-    )
-
-    if (
-        update.message.chat.type != update.message.chat.PRIVATE
-        and member.status
-        not in [
-            telegram.constants.ChatMemberStatus.ADMINISTRATOR,
-            telegram.constants.ChatMemberStatus.OWNER,
-        ]
-    ):
-        return
-
-    chat_id = (update.message.text or "").split(" ")[1]
-    publisher_id = (update.message.text or "").split(" ")[2]
-
-    try:
-        chat_id = int(chat_id)
-        publisher_id = int(publisher_id)
-    except ValueError:
-        await update.message.reply_text(
-            "Invalid chat IDs. Expected two integers (chat ID and Discord ID)."
+        application = Application.builder().token(self.token).build()
+        application.add_handler(CommandHandler("get_id", self.get_id_command))
+        application.add_handler(CommandHandler("subs", self.subs_command))
+        application.add_handler(CommandHandler("sub", self.subscribe_command))
+        application.add_handler(
+            CommandHandler("unsub", self.unsubscribe_command)
         )
-        return
+        self.app = application
 
-    logger.info(f"Subscribing {chat_id} to {publisher_id}")
-    subscriptions.subscribe(chat_id, publisher_id)
-    await update.message.reply_text("Subscribed!")
+    async def start(self) -> None:
+        self.logger.info("Starting Telegram bot.")
+        await self.app.initialize()
+        await self.app.start()
 
+        if not self.app.updater:
+            self.logger.error("Telegram updater did not initialize.")
+            return
+        await self.app.updater.start_polling()
 
-async def unsubscribe_command(
-    update: telegram.Update, _: ContextTypes.DEFAULT_TYPE
-) -> None:
-    logger.debug(f"Received unsubscribe command: {update.message}")
-    if update.message is None:
-        return
-    if update.message.from_user is None:
-        return
+    async def stop(self) -> None:
+        self.logger.info("Stopping Telegram bot.")
+        if self.app.updater:
+            await self.app.updater.stop()
 
-    member = await update.get_bot().get_chat_member(
-        update.message.chat_id, update.message.from_user.id
-    )
+        await self.app.stop()
+        await self.app.shutdown()
 
-    if (
-        update.message.chat.type != update.message.chat.PRIVATE
-        and member.status
-        not in [
-            telegram.constants.ChatMemberStatus.ADMINISTRATOR,
-            telegram.constants.ChatMemberStatus.OWNER,
-        ]
-    ):
-        return
+    async def send_message(self, message: core.Message) -> None:
+        if self.app.bot is None:
+            self.logger.error("Telegram bot not initialized.")
+            return
 
-    logger.info(f"Unsubscribing {update.message.chat_id} from publishers.")
-    subscriptions.unsubscribe_all(update.message.chat_id)
-    await update.message.reply_text("Unsubscribed!")
+        for chat_id in self.broker.get_subscribers(str(message.chat_id)):
+            self.logger.debug(
+                f"Sending message from {message.chat_id} to {chat_id}"
+            )
+            await self.app.bot.send_message(chat_id, message.text)
+
+    async def get_id_command(
+        self, update: telegram.Update, _: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        self.logger.debug(f"Received get_id command: {update.message}")
+        if not await self._is_from_admin(update):
+            return
+        if update.message is None or update.message.from_user is None:
+            return
+
+        self.logger.info(f"Sending chat ID to {update.message.from_user}")
+        await update.message.from_user.send_message(
+            f"{update.message.chat_id}"
+        )
+
+    async def subs_command(
+        self, update: telegram.Update, _: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        self.logger.debug(f"Received subs command: {update.message}")
+        if update.message is None or update.message.from_user is None:
+            return
+        if not await self._is_from_admin(update):
+            return
+
+        self.logger.info(
+            f"Getting subscriptions count for {update.message.chat_id}"
+        )
+        subs = self.broker.get_subscriptions(str(update.message.chat_id))
+        await update.message.from_user.send_message(f"Subscriptions: {subs}")
+
+    async def subscribe_command(
+        self, update: telegram.Update, _: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        self.logger.debug(f"Received subscribe command: {update.message}")
+        if update.message is None or update.message.from_user is None:
+            return
+        if not await self._is_from_admin(update):
+            return
+
+        chat_id = (update.message.text or "").split(" ")[1]
+        publisher_id = (update.message.text or "").split(" ")[2]
+
+        try:
+            chat_id = int(chat_id)
+            publisher_id = int(publisher_id)
+        except ValueError:
+            await update.message.reply_text(
+                "Invalid chat IDs. Expected two integers (chat ID and Discord ID)."
+            )
+            return
+
+        self.logger.info(f"Subscribing {chat_id} to {publisher_id}")
+        self.broker.subscribe(str(chat_id), publisher_id)
+        await update.message.reply_text("Subscribed!")
+
+    async def unsubscribe_command(
+        self, update: telegram.Update, _: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        self.logger.debug(f"Received unsubscribe command: {update.message}")
+        if update.message is None or update.message.from_user is None:
+            return
+        if not await self._is_from_admin(update):
+            return
+
+        self.logger.info(
+            f"Unsubscribing {update.message.chat_id} from publishers."
+        )
+        self.broker.unsubscribe_all(str(update.message.chat_id))
+        await update.message.reply_text("Unsubscribed!")
+
+    async def _is_from_admin(self, update: telegram.Update) -> bool:
+        if update.message is None or update.message.from_user is None:
+            return False
+        member = await update.get_bot().get_chat_member(
+            update.message.chat_id, update.message.from_user.id
+        )
+
+        return (
+            update.message.chat.type == update.message.chat.PRIVATE
+            or member.status
+            in [
+                telegram.constants.ChatMemberStatus.ADMINISTRATOR,
+                telegram.constants.ChatMemberStatus.OWNER,
+            ]
+        )
