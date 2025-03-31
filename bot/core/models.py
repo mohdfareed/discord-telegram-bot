@@ -21,7 +21,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application settings."""
 
-    model_config = SettingsConfigDict(env_file=dotenv.find_dotenv())
+    model_config = SettingsConfigDict(
+        env_file=dotenv.find_dotenv(), extra="allow"
+    )
 
     discord_bot_token: str = ""
     telegram_bot_token: str = ""
