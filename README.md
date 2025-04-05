@@ -29,5 +29,5 @@ A lightweight bot that forwards messages from a Discord channel to a Telegram ch
 
 **Bots Links:**
 
-- [Telegram Bot](t.me/discord_telegram_forward_bot)
+- [Telegram Bot](t.me/LiquidityClubBot)
 - [Discord Bot](https://discord.com/oauth2/authorize?client_id=1348406687706517594)

@@ -7,6 +7,8 @@ from bot import core
 
 
 class DiscordBot(core.ChatBot, commands.Cog):
+    COMMAND_PREFIX = "/"
+
     def __init__(
         self, token: str, broker: core.ChatBroker, db: core.Database
     ) -> None:
@@ -17,6 +19,9 @@ class DiscordBot(core.ChatBot, commands.Cog):
         intents.guilds = True
         intents.guild_messages = True
         intents.message_content = True
+        self.bot = commands.Bot(
+            command_prefix=DiscordBot.COMMAND_PREFIX, intents=intents
+        )
 
         @commands.command()
         @commands.has_permissions(administrator=True)
@@ -42,7 +47,6 @@ class DiscordBot(core.ChatBot, commands.Cog):
             await self.reset(ctx)
             await ctx.message.delete()
 
-        self.bot = commands.Bot(command_prefix="/", intents=intents)
         self.bot.add_command(pause)
         self.bot.add_command(resume)
         self.bot.add_command(id)
@@ -63,6 +67,8 @@ class DiscordBot(core.ChatBot, commands.Cog):
     @commands.has_permissions(administrator=True)
     async def on_message(self, message: discord.Message) -> None:
         if message.author == self.bot.user:
+            return
+        if message.content.startswith(DiscordBot.COMMAND_PREFIX):
             return
 
         msg = self._parse(message)
