@@ -31,7 +31,11 @@ class ChatBot:
 
     def subscribe(self, bot: "ChatBot") -> None:
         """Subscribe a bot to the current bot by forwarding messages to it."""
-        self.logger.debug("Creating subscription: %s -> %s", self, bot)
+        self.logger.debug(
+            "Creating subscription: %s -> %s",
+            bot.__class__.__name__,
+            self.__class__.__name__,
+        )
         self.subscribers.append(bot)
 
     def _handle_message(self, message: models.Message) -> None:

@@ -6,8 +6,6 @@ from discord.ext import commands
 from bot import core
 
 
-# TODO: Add help command
-# TODO: Delete command messages after processing
 class DiscordBot(core.ChatBot, commands.Cog):
     def __init__(
         self, token: str, broker: core.ChatBroker, db: core.Database
@@ -22,32 +20,36 @@ class DiscordBot(core.ChatBot, commands.Cog):
 
         @commands.command()
         @commands.has_permissions(administrator=True)
-        async def pause(_: commands.Context[commands.Bot]) -> None:
+        async def pause(ctx: commands.Context[commands.Bot]) -> None:
             self.pause_bot()
+            await ctx.message.delete()
 
         @commands.command()
         @commands.has_permissions(administrator=True)
-        async def resume(_: commands.Context[commands.Bot]) -> None:
+        async def resume(ctx: commands.Context[commands.Bot]) -> None:
             self.resume_bot()
+            await ctx.message.delete()
 
         @commands.command()
         @commands.has_permissions(administrator=True)
-        async def get_id(ctx: commands.Context[commands.Bot]) -> None:
+        async def id(ctx: commands.Context[commands.Bot]) -> None:
             await self.get_id(ctx)
+            await ctx.message.delete()
 
         @commands.command()
         @commands.has_permissions(administrator=True)
-        async def reset_subs(ctx: commands.Context[commands.Bot]) -> None:
-            await self.reset_subs(ctx)
+        async def reset(ctx: commands.Context[commands.Bot]) -> None:
+            await self.reset(ctx)
+            await ctx.message.delete()
 
         self.bot = commands.Bot(command_prefix="/", intents=intents)
-        self.bot.add_listener(self.on_ready)
-        self.bot.add_listener(self.on_message)
-
         self.bot.add_command(pause)
         self.bot.add_command(resume)
-        self.bot.add_command(get_id)
-        self.bot.add_command(reset_subs)
+        self.bot.add_command(id)
+        self.bot.add_command(reset)
+
+        self.bot.add_listener(self.on_ready)
+        self.bot.add_listener(self.on_message)
 
     async def start(self) -> None:
         self.logger.info("Starting Discord bot.")
@@ -60,10 +62,10 @@ class DiscordBot(core.ChatBot, commands.Cog):
 
     @commands.has_permissions(administrator=True)
     async def on_message(self, message: discord.Message) -> None:
-        msg = self._parse(message)
-        self.logger.debug(f"Received Discord message: {msg}")
         if message.author == self.bot.user:
             return
+
+        msg = self._parse(message)
         self._handle_message(msg)
         await self.bot.process_commands(message)
 
@@ -71,9 +73,12 @@ class DiscordBot(core.ChatBot, commands.Cog):
 
     async def send(self, message: core.Message) -> None:
         await super().send(message)
-        raise NotImplementedError(
-            "Discord bot does not support sending messages."
+        self.logger.error(
+            "Sending messages with Discord bot is not supported: %s", message
         )
+        # raise NotImplementedError(
+        #     "Discord bot does not support sending messages.", message
+        # )
 
     async def get_id(self, ctx: commands.Context[commands.Bot]) -> None:
         msg = self._parse(ctx.message)
@@ -84,7 +89,7 @@ class DiscordBot(core.ChatBot, commands.Cog):
         self.logger.info(f"Sending chat ID to {author}: {id}")
         await author.send(f"{id}")
 
-    async def reset_subs(self, ctx: commands.Context[commands.Bot]) -> None:
+    async def reset(self, ctx: commands.Context[commands.Bot]) -> None:
         msg = self._parse(ctx.message)
         self.logger.debug(f"Received reset_subs command: {msg}")
         author = ctx.message.author

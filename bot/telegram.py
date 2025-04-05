@@ -3,20 +3,33 @@ __all__ = ["TelegramBot"]
 from typing import override
 
 import telegram
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    ContextTypes,
-    MessageHandler,
-    filters,
-)
+from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import filters as telegram_filters
 
 from bot import core
 
+INVALID_MARKDOWN = (
+    "_",
+    "*",
+    "[",
+    "]",
+    "(",
+    ")",
+    "~",
+    "`",
+    ">",
+    "#",
+    "+",
+    "-",
+    "=",
+    "|",
+    "{",
+    "}",
+    ".",
+    "!",
+)
 
-# TODO: Add help command
-# TODO: Delete command messages after processing
-# Handle channel messages (different update structure)
+
 class TelegramBot(core.ChatBot):
     def __init__(
         self, token: str, broker: core.ChatBroker, db: core.Database
@@ -24,15 +37,19 @@ class TelegramBot(core.ChatBot):
         super().__init__(broker, db)
         self.token = token
 
-        application = Application.builder().token(self.token).build()
-        application.add_handler(
-            MessageHandler(filters.ALL, self.get_id_command)
+        channel_command_filter = telegram_filters.COMMAND & (
+            telegram_filters.ChatType.GROUP
+            | telegram_filters.ChatType.SUPERGROUP
+            | telegram_filters.ChatType.CHANNEL
         )
 
-        application.add_handler(CommandHandler("get_id", self.get_id_command))
+        application = Application.builder().token(self.token).build()
         application.add_handler(CommandHandler("sub", self.subscribe_command))
+        application.add_handler(CommandHandler("reset", self.reset_command))
         application.add_handler(
-            CommandHandler("unsub", self.unsubscribe_command)
+            CommandHandler(
+                "id", self.get_id_command, filters=channel_command_filter
+            )
         )
         self.app = application
 
@@ -45,9 +62,10 @@ class TelegramBot(core.ChatBot):
 
         await self.app.initialize()
         await self.app.start()
-        await self.app.updater.start_polling()
+        await self.app.updater.start_polling(drop_pending_updates=True)
 
     async def stop(self) -> None:
+        """Stop the bot. Must be called before exiting the program."""
         self.logger.debug("Stopping Telegram bot.")
         if self.app.updater:
             await self.app.updater.stop()
@@ -56,85 +74,107 @@ class TelegramBot(core.ChatBot):
 
     @override
     async def send(self, message: core.Message) -> None:
-        if not self.settings.is_active:
-            return
-
         for chat_id in self.broker.get_subscribers(str(message.chat_id)):
-            self.logger.debug(
-                f"Sending message from {message.chat_id} to {chat_id}"
-            )
             await self.app.bot.send_message(chat_id, message.text)
+
+    # MARK: Commands ==========================================================
 
     async def get_id_command(
         self, update: telegram.Update, _: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        self.logger.debug(f"Received get_id command: {update}")
-        # await update.channel_post.reply_text(update.channel_post.chat.id)
-        if not await self._is_from_admin(update):
-            return
-        if update.message is None or update.message.from_user is None:
+        self.logger.debug(f"Received id command: {update}")
+        message = update.message or update.channel_post
+        if message is None:
             return
 
-        self.logger.info(f"Sending chat ID to {update.message.from_user}")
-        await update.message.from_user.send_message(
-            f"{update.message.chat_id}"
+        (sender, chat) = message.from_user, message.sender_chat
+        if sender is None:
+            if chat is None:
+                return
+
+            try:
+                username = (message.text or "").split(" ")[1]
+            except (ValueError, IndexError):
+                await message.reply_text(
+                    "Invalid admin username\\. Expected the username of the "
+                    "admin who will receive the chat ID: `/id <username>`",
+                    parse_mode=telegram.constants.ParseMode.MARKDOWN_V2,
+                )
+                return
+            sender = next(
+                (
+                    admin
+                    for admin in await chat.get_administrators()
+                    if admin.user.username == username
+                ),
+                None,
+            )
+            if sender is None:
+                await message.reply_text(
+                    "No admin found with the provided username."
+                )
+                return
+        else:
+            sender = await self.app.bot.get_chat_member(
+                message.chat_id, sender.id
+            )
+        if sender.status not in (
+            telegram.constants.ChatMemberStatus.ADMINISTRATOR,
+            telegram.constants.ChatMemberStatus.OWNER,
+        ):
+            return
+
+        self.logger.info(f"Sending chat ID to: {sender}")
+        await sender.user.send_message(
+            f"`{message.chat_id}`",
+            parse_mode=telegram.constants.ParseMode.MARKDOWN_V2,
         )
+        await message.delete()
 
     async def subscribe_command(
         self, update: telegram.Update, _: ContextTypes.DEFAULT_TYPE
-    ) -> None:
+    ) -> None:  # used in private chats
         self.logger.debug(f"Received subscribe command: {update}")
         if update.message is None or update.message.from_user is None:
             return
-        if not await self._is_from_admin(update):
+        if update.message.chat.type != telegram.constants.ChatType.PRIVATE:
             return
 
-        chat_id = (update.message.text or "").split(" ")[1]
-        publisher_id = (update.message.text or "").split(" ")[2]
-
         try:
-            chat_id = int(chat_id)
+            publisher_id = (update.message.text or "").split(" ")[1]
             publisher_id = int(publisher_id)
-        except ValueError:
+            chat_id = (update.message.text or "").split(" ")[2]
+            chat_id = int(chat_id)
+        except (ValueError, IndexError):
             await update.message.reply_text(
-                "Invalid chat IDs. Expected two integers (chat ID and Discord ID)."
+                "Invalid chat IDs\\. Expected two integers, the publisher "
+                "chat ID and the listener chat ID: `/sub <pub_id> <chat_id>`",
+                parse_mode=telegram.constants.ParseMode.MARKDOWN_V2,
             )
             return
 
         self.logger.info(f"Subscribing {chat_id} to {publisher_id}")
         self.broker.subscribe(str(chat_id), publisher_id)
-        await update.message.reply_text("Subscribed!")
+        await update.message.reply_text("Subscribed.")
+        if update.message:
+            await update.message.delete()
 
-    async def unsubscribe_command(
+    async def reset_command(
         self, update: telegram.Update, _: ContextTypes.DEFAULT_TYPE
-    ) -> None:
+    ) -> None:  # used in private chats
         self.logger.debug(f"Received unsubscribe command: {update}")
         if update.message is None or update.message.from_user is None:
             return
-        if not await self._is_from_admin(update):
+        if update.message.chat.type != telegram.constants.ChatType.PRIVATE:
             return
 
         self.logger.info(
             f"Unsubscribing {update.message.chat_id} from publishers."
         )
         self.broker.unsubscribe_all(str(update.message.chat_id))
-        await update.message.reply_text("Unsubscribed!")
-
-    async def _is_from_admin(self, update: telegram.Update) -> bool:
-        if update.message is None or update.message.from_user is None:
-            return False
-        member = await update.get_bot().get_chat_member(
-            update.message.chat_id, update.message.from_user.id
-        )
-
-        return (
-            update.message.chat.type == update.message.chat.PRIVATE
-            or member.status
-            in [
-                telegram.constants.ChatMemberStatus.ADMINISTRATOR,
-                telegram.constants.ChatMemberStatus.OWNER,
-            ]
-        )
+        await update.message.reply_text("Unsubscribed.")
+        if update.message:
+            await update.message.delete()
 
     @staticmethod
     def _parse(msg: telegram.Message) -> core.Message:
