@@ -74,6 +74,7 @@ class TelegramBot(core.ChatBot):
 
     @override
     async def send(self, message: core.Message) -> None:
+        message.text = message.text.replace("@everyone", "").strip()
         for chat_id in self.broker.get_subscribers(str(message.chat_id)):
             await self.app.bot.send_message(chat_id, message.text)
 
