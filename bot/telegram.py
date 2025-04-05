@@ -1,25 +1,42 @@
 __all__ = ["TelegramBot"]
 
+from typing import override
+
 import telegram
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
 from bot import core
 
 
+# TODO: Add help command
+# TODO: Delete command messages after processing
+# Handle channel messages (different update structure)
 class TelegramBot(core.ChatBot):
-    def __init__(self, token: str, broker: core.ChatBroker) -> None:
-        super().__init__(broker)
+    def __init__(
+        self, token: str, broker: core.ChatBroker, db: core.Database
+    ) -> None:
+        super().__init__(broker, db)
         self.token = token
 
         application = Application.builder().token(self.token).build()
+        application.add_handler(
+            MessageHandler(filters.ALL, self.get_id_command)
+        )
+
         application.add_handler(CommandHandler("get_id", self.get_id_command))
-        application.add_handler(CommandHandler("subs", self.subs_command))
         application.add_handler(CommandHandler("sub", self.subscribe_command))
         application.add_handler(
             CommandHandler("unsub", self.unsubscribe_command)
         )
         self.app = application
 
+    @override
     async def start(self) -> None:
         self.logger.info("Starting Telegram bot.")
         if not self.app.updater:
@@ -37,9 +54,9 @@ class TelegramBot(core.ChatBot):
         await self.app.stop()
         await self.app.shutdown()
 
-    async def send_message(self, message: core.Message) -> None:
-        if self.app.bot is None:
-            self.logger.error("Telegram bot not initialized.")
+    @override
+    async def send(self, message: core.Message) -> None:
+        if not self.settings.is_active:
             return
 
         for chat_id in self.broker.get_subscribers(str(message.chat_id)):
@@ -51,7 +68,8 @@ class TelegramBot(core.ChatBot):
     async def get_id_command(
         self, update: telegram.Update, _: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        self.logger.debug(f"Received get_id command: {update.message}")
+        self.logger.debug(f"Received get_id command: {update}")
+        # await update.channel_post.reply_text(update.channel_post.chat.id)
         if not await self._is_from_admin(update):
             return
         if update.message is None or update.message.from_user is None:
@@ -62,25 +80,10 @@ class TelegramBot(core.ChatBot):
             f"{update.message.chat_id}"
         )
 
-    async def subs_command(
-        self, update: telegram.Update, _: ContextTypes.DEFAULT_TYPE
-    ) -> None:
-        self.logger.debug(f"Received subs command: {update.message}")
-        if update.message is None or update.message.from_user is None:
-            return
-        if not await self._is_from_admin(update):
-            return
-
-        self.logger.info(
-            f"Getting subscriptions count for {update.message.chat_id}"
-        )
-        subs = self.broker.get_subscriptions(str(update.message.chat_id))
-        await update.message.from_user.send_message(f"Subscriptions: {subs}")
-
     async def subscribe_command(
         self, update: telegram.Update, _: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        self.logger.debug(f"Received subscribe command: {update.message}")
+        self.logger.debug(f"Received subscribe command: {update}")
         if update.message is None or update.message.from_user is None:
             return
         if not await self._is_from_admin(update):
@@ -105,7 +108,7 @@ class TelegramBot(core.ChatBot):
     async def unsubscribe_command(
         self, update: telegram.Update, _: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        self.logger.debug(f"Received unsubscribe command: {update.message}")
+        self.logger.debug(f"Received unsubscribe command: {update}")
         if update.message is None or update.message.from_user is None:
             return
         if not await self._is_from_admin(update):
@@ -132,3 +135,8 @@ class TelegramBot(core.ChatBot):
                 telegram.constants.ChatMemberStatus.OWNER,
             ]
         )
+
+    @staticmethod
+    def _parse(msg: telegram.Message) -> core.Message:
+        """Create a message from a Telegram message."""
+        return core.Message(text=msg.text or "", chat_id=msg.chat_id)

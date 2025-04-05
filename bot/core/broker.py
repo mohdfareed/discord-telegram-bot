@@ -9,11 +9,17 @@ from . import db, models
 class ChatBroker:
     """The chat broker between bots."""
 
-    database: db.Database
-
     def __init__(self, db: db.Database) -> None:
         self.logger = logging.getLogger(type(self).__name__)
         self.database = db
+
+    def get_publisher_id(self, publisher: str) -> int:
+        """Get the unique ID of a publisher."""
+        brokage = self.database.load(models.Brokage())
+        if publisher not in brokage.pubs:
+            self.reset_publisher_id(publisher)
+            brokage = self.database.load(models.Brokage())  # reload
+        return brokage.pubs[publisher]
 
     def reset_publisher_id(self, publisher: str) -> None:
         """Reset the unique ID of a publisher, removing all subscriptions."""
@@ -26,14 +32,6 @@ class ChatBroker:
         brokage.pubs[publisher] = new_id  # update publisher id
         brokage.subs[new_id] = set()  # create new subs
         self.database.save(brokage)
-
-    def get_publisher_id(self, publisher: str) -> int:
-        """Get the unique ID of a publisher."""
-        brokage = self.database.load(models.Brokage())
-        if publisher not in brokage.pubs:
-            self.reset_publisher_id(publisher)
-            brokage = self.database.load(models.Brokage())  # reload
-        return brokage.pubs[publisher]
 
     def get_subscribers(self, publisher: str) -> set[str]:
         """Get the subscribers of a publisher."""

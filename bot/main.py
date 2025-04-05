@@ -32,22 +32,26 @@ def main(
 
 @app.command()
 def start() -> None:
-    """Start the bot."""
+    """Start the bots."""
     asyncio.run(start_bots())
 
 
 async def start_bots() -> None:
+    # dependencies
     app_settings = models.Settings()
     db = core.JSONDataBase(app_settings.data_path)
     broker = core.ChatBroker(db)
 
-    discord_bot = discord.DiscordBot(app_settings.discord_bot_token, broker)
-    telegram_bot = telegram.TelegramBot(
-        app_settings.telegram_bot_token, broker
+    # bots setup
+    discord_bot = discord.DiscordBot(
+        app_settings.discord_bot_token, broker, db
     )
-    discord_bot.register_message_handler(telegram_bot.send_message)
+    telegram_bot = telegram.TelegramBot(
+        app_settings.telegram_bot_token, broker, db
+    )
+    discord_bot.subscribe(telegram_bot)
 
-    try:
+    try:  # start app
         await telegram_bot.start()
         await discord_bot.start()
     finally:  # cleanup

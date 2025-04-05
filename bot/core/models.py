@@ -2,18 +2,14 @@ __all__ = [
     "Settings",
     "Brokage",
     "Message",
-    "MessageHandler",
     "DatabaseException",
     "DiscordException",
     "TelegramException",
 ]
 
 from pathlib import Path
-from typing import Callable, Coroutine, Self
 
-import discord
 import dotenv
-import telegram
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -33,6 +29,7 @@ class Settings(BaseSettings):
 
 
 class Brokage(BaseModel):
+    """A chat broker for managing subscriptions."""
 
     subs: dict[int, set[str]] = {}
     """List of publishers (by ID) and their subscribers."""
@@ -40,24 +37,20 @@ class Brokage(BaseModel):
     """Dictionary of publishers and their unique IDs."""
 
 
+class BotSettings(BaseModel):
+    """Settings for the bot."""
+
+    name: str
+    """Bot name."""
+    is_active: bool = True
+    """Whether the bot is active."""
+
+
 class Message(BaseModel):
     """A chat message."""
 
     chat_id: int
     text: str
-
-    @classmethod
-    def from_discord(cls, msg: discord.Message) -> Self:
-        """Create a message from a Discord message."""
-        return cls(text=msg.content, chat_id=msg.channel.id)
-
-    @classmethod
-    def from_telegram(cls, msg: telegram.Message) -> Self:
-        """Create a message from a Telegram message."""
-        return cls(text=msg.text or "", chat_id=msg.chat_id)
-
-
-MessageHandler = Callable[[Message], Coroutine[None, None, None]]
 
 
 class DatabaseException(Exception):
@@ -69,4 +62,6 @@ class DiscordException(Exception):
 
 
 class TelegramException(Exception):
+    """An exception raised by the Telegram API."""
+
     """An exception raised by the Telegram API."""
