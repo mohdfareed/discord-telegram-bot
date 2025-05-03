@@ -76,7 +76,16 @@ class TelegramBot(core.ChatBot):
     async def send(self, message: core.Message) -> None:
         message.text = message.text.replace("@everyone", "").strip()
         for chat_id in self.broker.get_subscribers(str(message.chat_id)):
-            await self.app.bot.send_message(chat_id, message.text)
+            if not message.attachments:
+                await self.app.bot.send_message(chat_id, message.text)
+                continue
+            for attachment in message.attachments:
+                await self.app.bot.send_photo(
+                    chat_id,
+                    attachment,
+                    caption=message.text,
+                    parse_mode=telegram.constants.ParseMode.MARKDOWN_V2,
+                )
 
     # MARK: Commands ==========================================================
 
@@ -178,6 +187,13 @@ class TelegramBot(core.ChatBot):
             await update.message.delete()
 
     @staticmethod
-    def _parse(msg: telegram.Message) -> core.Message:
+    async def _parse(msg: telegram.Message) -> core.Message:
         """Create a message from a Telegram message."""
-        return core.Message(text=msg.text or "", chat_id=msg.chat_id)
+        attachments = [
+            bytes(await (await photo.get_file()).download_as_bytearray())
+            for photo in msg.photo
+        ]
+
+        return core.Message(
+            text=msg.text or "", chat_id=msg.chat_id, attachments=attachments
+        )

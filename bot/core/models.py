@@ -51,6 +51,10 @@ class Message(BaseModel):
 
     chat_id: int
     text: str
+    attachments: list[bytes] = []
+
+
+# MARK: Exceptions ============================================================
 
 
 class DatabaseException(Exception):

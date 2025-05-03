@@ -72,7 +72,7 @@ class DiscordBot(core.ChatBot, commands.Cog):
             return
 
         msg = self._parse(message)
-        self._handle_message(msg)
+        self._handle_message(await msg)
         await self.bot.process_commands(message)
 
     # MARK: Commands ==========================================================
@@ -91,7 +91,7 @@ class DiscordBot(core.ChatBot, commands.Cog):
         self.logger.debug(f"Received get_id command: {msg}")
         author = ctx.message.author
 
-        id = self.broker.get_publisher_id(str(msg.chat_id))
+        id = self.broker.get_publisher_id(str((await msg).chat_id))
         self.logger.info(f"Sending chat ID to {author}: {id}")
         await author.send(f"{id}")
 
@@ -100,11 +100,17 @@ class DiscordBot(core.ChatBot, commands.Cog):
         self.logger.debug(f"Received reset_subs command: {msg}")
         author = ctx.message.author
 
-        self.broker.reset_publisher_id(str(msg.chat_id))
-        self.logger.info(f"Resetting subscriptions for {msg.chat_id}")
+        self.broker.reset_publisher_id(str((await msg).chat_id))
+        self.logger.info(f"Resetting subscriptions for {(await msg).chat_id}")
         await author.send("Subscriptions reset.")
 
     @staticmethod
-    def _parse(msg: discord.Message) -> core.Message:
+    async def _parse(msg: discord.Message) -> core.Message:
         """Create a message from a Discord message."""
-        return core.Message(text=msg.content, chat_id=msg.channel.id)
+        return core.Message(
+            text=msg.content,
+            chat_id=msg.channel.id,
+            attachments=[
+                await attachment.read() for attachment in msg.attachments
+            ],
+        )
