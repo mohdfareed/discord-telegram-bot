@@ -25,6 +25,7 @@
         ".env",
         ".dockerignore",
         ".gitignore",
+        "poetry.lock",
         "pyproject.toml",
     ],
     "cSpell.words": [
